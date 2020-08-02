@@ -107,13 +107,13 @@ def _create_partial_labels(tokenizer: VisualCometTokenizer, tokenized_text, mode
 
         # create lm labels for event and place as well
         if mode == 'all':
-            event_start_token = tokenizer.convert_tokens_to_ids([tokenizer.start_event])[0]
+            event_start_token = tokenizer.convert_tokens_to_ids([tokenizer.begin_event])[0]
             start_idx = tokenized_text.index(event_start_token)
             event_end_token = tokenizer.convert_tokens_to_ids([tokenizer.end_event])[0]
             end_idx = tokenized_text.index(event_end_token)
             labels[start_idx + 1: end_idx + 1] = tokenized_text[start_idx + 1:end_idx + 1]
 
-            event_start_token = tokenizer.convert_tokens_to_ids([tokenizer.start_place])[0]
+            event_start_token = tokenizer.convert_tokens_to_ids([tokenizer.begin_place])[0]
             start_idx = tokenized_text.index(event_start_token)
             event_end_token = tokenizer.convert_tokens_to_ids([tokenizer.end_place])[0]
             end_idx = tokenized_text.index(event_end_token)
