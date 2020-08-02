@@ -111,11 +111,12 @@ def compute_metric_inference(gens_list, refs_list, calculate_diversity=False, tr
         event_idx = gens['event_idx']
         relation = gens['inference_relation']
         ref = refs_list[event_idx][relation]
-        for pred in gens['generations']:
-            pred = pred.replace('<|det', '').replace('|>', '')
-            preds[cnt] = [{'caption': pred}]
-            refs[cnt] = [{'caption': r} for r in ref]
-            cnt += 1
+        if len(ref) > 0:
+            for pred in gens['generations']:
+                pred = pred.replace('<|det', '').replace('|>', '')
+                preds[cnt] = [{'caption': pred}]
+                refs[cnt] = [{'caption': r} for r in ref]
+                cnt += 1
 
     refs = tokenizer.tokenize(refs)
     preds = tokenizer.tokenize(preds)
