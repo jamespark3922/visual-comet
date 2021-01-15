@@ -270,9 +270,6 @@ class VCGGenLoader:
         self.coco_objects = ['__background__'] + [x['name'] for k, x in sorted(coco.items(), key=lambda x: int(x[0]))]
         self.coco_obj_to_ind = {o: i for i, o in enumerate(self.coco_objects)}
 
-        # self.embs_to_load = embs_to_load
-        # self.h5fn = os.path.join(VCG_ANNOTS_DIR, f'{self.embs_to_load}_{self.mode}_{self.split}.h5')
-        # print("Loading embeddings from {}".format(self.h5fn), flush=True)
 
     @property
     def is_train(self):

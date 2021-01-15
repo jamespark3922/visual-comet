@@ -10,7 +10,7 @@
    parallelDownloads=8
  fi
 
- ########## download videos
+ ########## download videos #
  wget -c https://storage.googleapis.com/jamesp/lsmdc/video_list.txt
  filesToDownloadMD="video_list.txt"
 

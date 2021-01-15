@@ -377,7 +377,7 @@ class VCGRankLoader:
     def add_negative_examples(self, index, mode='random', num_examples=10):
 
         indices = self.inference_index[self.index_inference[index]].copy() # indices of each individual inference sentences
-        choices = [1] * len(indices) # first inference sentences are the correct choices
+        choices = [1] * len(indices) # first inference sentences are the correct choices.
         if 'random' in mode:
             num_samples = num_examples - len(indices)
             others = random.sample([idx for idx in range(len(self.records)) if idx not in indices],num_samples)
