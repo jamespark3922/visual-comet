@@ -138,6 +138,12 @@ Run retrieval evaluation to get Acc@50 in paper with the command:
 python scripts/run_rank.py --data_dir /path/to/visualcomet_annotations/ --model_name_or_path experiments/image_inference/ --split val
 ```
 
+## Downloading Before-After Videos
+You can also download videos (~300GB) that happened before and after the image:
+```
+bash scripts/download_videos.sh
+```
+Note that some image may not have either one of before and after videos, if the image appeared in the beginning or end of the clip.
 
 ## Test Set Evaluation
 We will add the evaluation server soon. 
