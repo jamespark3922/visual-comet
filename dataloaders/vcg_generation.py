@@ -388,9 +388,9 @@ class VCGGenLoader:
         subject_ids = [int(dets2use[i] in subjects) for i in range(len(obj_labels))]
 
         # add the image in the first visual sequence
+        w = metadata['width']
+        h = metadata['height']
         if self.add_image_as_a_box:
-            w = metadata['width']
-            h = metadata['height']
             features = np.row_stack((features_dict['image_features'], features))
             boxes = np.row_stack((np.array([0, 0, w, h]), boxes))
             segms = np.concatenate((np.ones((1, 14, 14), dtype=np.float32), segms), 0)

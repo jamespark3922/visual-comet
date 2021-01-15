@@ -5,6 +5,7 @@ import json
 import os
 from copy import deepcopy
 
+import random
 import pickle
 import numpy as np
 from tqdm import tqdm, trange
@@ -14,7 +15,7 @@ import torch
 from dataloaders.tokenizers import VisualCometTokenizer
 from dataloaders.mask_utils import make_mask
 
-from utils.file_utils import read_and_parse_finetune_json, read_and_parse_generation_json
+from utils.file_utils import read_and_parse_finetune_json
 
 from config import VCR_IMAGES_DIR, VCR_FEATURES_DIR
 
@@ -85,57 +86,28 @@ def vcg_record_to_tokens(tokenizer: VisualCometTokenizer,
     inference_text = record['inference_text_name']
 
     training_instance = [[tokenizer.begin_img] + [tokenizer.unk_token] * num_max_boxes + [tokenizer.end_img]]
-    training_instance.append([tokenizer.begin_event,event,tokenizer.end_event])
-    training_instance.append([tokenizer.begin_place,place,tokenizer.end_place])
+    training_instance.append([tokenizer.begin_event, event, tokenizer.end_event])
+    training_instance.append([tokenizer.begin_place, place, tokenizer.end_place])
     training_instance.append([tokenizer.begin_inferences[inference], inference_text, tokenizer.end_inference])
 
     return training_instance
 
-def _create_partial_labels(tokenizer: VisualCometTokenizer, tokenized_text, mode):
-    try:
-        labels = [-1] * len(tokenized_text)
-
-        # create lm labels for inference sentences
-        possible_inferences = [tokenizer.convert_tokens_to_ids([br])[0] for br in tokenizer.begin_inferences.values()]
-        begin_inference = [r for r in possible_inferences if r in tokenized_text]
-        assert len(begin_inference) == 1
-        inference_start_token = begin_inference[0]
-        start_idx = tokenized_text.index(inference_start_token)
-        inference_end_token = tokenizer.convert_tokens_to_ids([tokenizer.end_inference])[0]
-        end_idx = tokenized_text.index(inference_end_token)
-        labels[start_idx + 1: end_idx + 1] = tokenized_text[start_idx + 1:end_idx + 1]
-
-        # create lm labels for event and place as well
-        if mode == 'all':
-            event_start_token = tokenizer.convert_tokens_to_ids([tokenizer.begin_event])[0]
-            start_idx = tokenized_text.index(event_start_token)
-            event_end_token = tokenizer.convert_tokens_to_ids([tokenizer.end_event])[0]
-            end_idx = tokenized_text.index(event_end_token)
-            labels[start_idx + 1: end_idx + 1] = tokenized_text[start_idx + 1:end_idx + 1]
-
-            event_start_token = tokenizer.convert_tokens_to_ids([tokenizer.begin_place])[0]
-            start_idx = tokenized_text.index(event_start_token)
-            event_end_token = tokenizer.convert_tokens_to_ids([tokenizer.end_place])[0]
-            end_idx = tokenized_text.index(event_end_token)
-            labels[start_idx + 1: end_idx + 1] = tokenized_text[start_idx + 1:end_idx + 1]
-
-        assert len(tokenized_text) == len(labels)
-        return labels
-    except ValueError:
-        raise Exception("Failed to tokenize: {}".format(tokenized_text))
-
-class VCGDataset:
+class VCGRankDataset:
     def __init__(self,
                  tokenizer,
                  file_path,
-                 max_seq_len=256,
                  cache_dir=None,
                  overwrite_cache=False,
                  cache_postfix=None,
                  include_image=False,
                  include_text=True,
+                 rank_mode=None,
                  mode='inference',
                  num_max_boxes=15,
+                 max_seq_len=256,
+                 max_event=39,
+                 max_place=22,
+                 max_inference=23,
                  only_use_relevant_dets=True,
                  ):
         vcg_dir = os.path.dirname(file_path)
@@ -144,12 +116,12 @@ class VCGDataset:
         self.include_text = include_text
         self.only_use_relevant_dets = only_use_relevant_dets
 
-        self.max_seq_len = max_seq_len
         self.num_max_boxes = num_max_boxes
-        self.max_image = None
-        self.max_event = None
-        self.max_place = None
-        self.max_inference = None
+        self.max_image = num_max_boxes + 2
+        self.max_event = max_event
+        self.max_place = max_place
+        self.max_inference = max_inference
+        self.max_seq_len = max_seq_len
 
         cache_name = 'cached_lm_max_seq_len_{}_mode_{}_include_text_{}'.format(max_seq_len, mode, str(include_text)).lower()
         if cache_postfix:
@@ -167,7 +139,7 @@ class VCGDataset:
         examples = {}
         labels = {}
         records = {}
-        splits = ['train', 'val']
+        splits = ['val']
 
         if os.path.exists(cached_features_files) and not overwrite_cache:
             print("Loading features from cached file %s", cached_features_files)
@@ -183,17 +155,10 @@ class VCGDataset:
         else:
             print("Creating features from dataset file at {} with cache file name: {}".format(vcg_dir, cached_features_files))
 
-            max_image = self.num_max_boxes + 2
-            max_event = 0
-            max_place = 0
-            max_inference = 0
-
             for s, split in enumerate(splits):
 
                 examples[split] = []
-                labels[split] = []
                 token_list = []
-                text_list = []
 
                 split_filename = '{}_annots.json'.format(split)
                 records[split] = read_and_parse_finetune_json(os.path.join(vcg_dir, split_filename))
@@ -212,25 +177,9 @@ class VCGDataset:
 
                     tokens = [tokenizer.tokenize(" ".join(vt)) for vt in vcg_tokens]
                     assert len(vcg_tokens) == 4
-                    if split == 'train':
-                        e_l, p_l, r_l = [len(vt) for vt in tokens[1:]]
-                        max_event = max(max_event, e_l)
-                        max_place = max(max_place, p_l)
-                        max_inference = max(max_inference, r_l)
                     token_list.append(tokens)
-                    text_list.append(vcg_tokens)
-                    idx+=1
 
-                if split == 'train':
-                    print('max_image, max_event, max_place, max_inference:', max_image, max_event, max_place, max_inference)
-                    self.max_image = max_image
-                    self.max_event = max_event
-                    self.max_place = max_place
-                    self.max_inference = max_inference
-
-                idx = 0
-                for tokens in tqdm(token_list):
-                    padded_tokens = _combine_and_pad_tokens(tokenizer, tokens, max_image, max_event, max_place, max_inference, max_seq_len)
+                    padded_tokens = _combine_and_pad_tokens(tokenizer, tokens, self.max_image, self.max_event, self.max_place, self.max_inference, self.max_seq_len)
                     tokenized_text = tokenizer.convert_tokens_to_ids(padded_tokens)
                     if not include_text: # mask out events and place text
                         inference_start_token_idx = tokenizer.convert_tokens_to_ids([tokenizer.begin_event])[0]
@@ -243,20 +192,17 @@ class VCGDataset:
                         tokenized_text[start_idx: end_idx + 1] = [unk_id] * (end_idx - start_idx + 1)
 
                     examples[split].append(tokenized_text)
-                    lm_labels = _create_partial_labels(tokenizer, tokenized_text, mode)
-                    labels[split].append(lm_labels)
 
                     if idx < num_ex:
                         print("***** Example Instance for Split: {} *****".format(split))
-                        print("Text: {}".format(text_list[idx]))
+                        print("Text: {}".format(vcg_tokens))
                         print("Tokenized Text: {}".format(tokenized_text))
-                        print("Labels: {}".format(lm_labels))
                         print("********\n")
                     idx+=1
 
             print("Saving features into cached file %s", cached_features_files)
             with open(cached_features_files, 'wb') as handle:
-                data = {s : (examples[s], labels[s], records[s]) for s in splits}
+                data = {s : (examples[s], records[s]) for s in splits}
                 pickle.dump(
                     {
                         'num_max_boxes' : self.num_max_boxes,
@@ -268,11 +214,15 @@ class VCGDataset:
                     },
                     handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+        event_pos = self.max_image
+        place_pos = self.max_image + self.max_event
+        inference_pos = self.max_image + self.max_event + self.max_place
         for split in splits:
-            self.vcg_dataset[split] = VCGLoader(examples[split], labels[split], records[split], split, tokenizer,
-                                                include_image=self.include_image,
-                                                num_max_boxes=self.num_max_boxes,
-                                                only_use_relevant_dets=self.only_use_relevant_dets)
+            self.vcg_dataset[split] = VCGRankLoader(examples[split], labels[split], records[split], split, rank_mode, tokenizer,
+                                                   event_pos, place_pos, inference_pos,
+                                                   include_image=self.include_image,
+                                                   num_max_boxes=self.num_max_boxes,
+                                                   only_use_relevant_dets=self.only_use_relevant_dets)
 
     def get_dataset(self, split):
         return self.vcg_dataset[split]
@@ -295,9 +245,9 @@ def _to_boxes_and_masks(features, boxes, obj_labels, segments, num_max_boxes):
 
     return padded_features, padded_boxes, padded_obj_labels, padding_segments, mask
 
-class VCGLoader:
-    def __init__(self, examples, labels, records, split, tokenizer,
-                 include_image=True, num_max_boxes=15, only_use_relevant_dets=True, add_image_as_a_box=True):
+class VCGRankLoader:
+    def __init__(self, examples, labels, records, split, rank_mode, tokenizer,  event_pos, place_pos, inference_pos,
+                 include_image=True, num_max_boxes=15, only_use_relevant_dets=True, add_image_as_a_box=True,):
         """
 
         :param split: train, val, or test
@@ -317,6 +267,37 @@ class VCGLoader:
         self.num_max_boxes = num_max_boxes
         self.add_image_as_a_box = add_image_as_a_box
         self.only_use_relevant_dets = only_use_relevant_dets
+
+        self.rank_mode = rank_mode
+        self.index_movie = {}
+        self.movie_index = {}
+        self.index_event = {}
+        self.event_index = {}
+        self.index_inference = {}
+        self.inference_index = {}
+
+        self.event_pos = event_pos
+        self.place_pos = place_pos
+        self.inference_pos = inference_pos
+
+        for i, r in enumerate(self.records):
+            movie = r['movie']
+            event = r['img_fn'] + '_' + r['event']
+            inference = r['img_fn'] + '_' + r['event'] + '_' + r['inference_relation']
+            self.index_movie[i] = movie
+            if movie not in self.movie_index:
+                self.movie_index[movie] = []
+            self.movie_index[movie].append(i)
+
+            self.index_event[i] = event
+            if event not in self.event_index:
+                self.event_index[event] = []
+            self.event_index[event].append(i)
+
+            self.index_inference[i] = inference
+            if inference not in self.inference_index:
+                self.inference_index[inference] = []
+            self.inference_index[inference].append(i)
         print("Only relevant dets" if only_use_relevant_dets else "Using all detections", flush=True)
 
         if split not in ('train', 'val', 'test'):
@@ -373,18 +354,6 @@ class VCGLoader:
                 tag = int(tag) - 1
                 if tag >= 0 and tag < len(objects):  # sanity check
                     dets2use[tag] = True
-
-            # # Uncomment after releasing subject annotations in the event descriptions
-            # for possibly_det_list in str(item['subject']).replace(',', ' ').split():
-            #     for tag in possibly_det_list:
-            #         if tag.isdigit():
-            #             tag = int(tag) - 1
-            #             if tag >= 0 and tag < len(objects):  # sanity check
-            #                 dets2use[tag] = True
-            #                 subjects[tag] = True
-            #         elif tag.lower() in ('everyone', 'everyones', 'group', 'crowd'):
-            #             dets2use |= people
-            #             subjects |= people
             if not dets2use.any():
                 dets2use |= people
 
@@ -405,18 +374,63 @@ class VCGLoader:
         old_det_to_new_ind = old_det_to_new_ind.tolist()
         return dets2use, old_det_to_new_ind, subjects
 
+    def add_negative_examples(self, index, mode='random', num_examples=10):
+
+        indices = self.inference_index[self.index_inference[index]].copy() # indices of each individual inference sentences
+        choices = [1] * len(indices) # first inference sentences are the correct choices
+        if 'random' in mode:
+            num_samples = num_examples - len(indices)
+            others = random.sample([idx for idx in range(len(self.records)) if idx not in indices],num_samples)
+            indices += others
+            choices += [0] * len(others)
+            return indices, choices
+        elif 'movie' in mode:
+            num_samples = min(len(self.index_movie[index]),num_examples - len(indices))
+            others = random.sample([idx for idx in self.movie_index[self.index_movie[index]] if idx not in indices], num_samples)
+            indices += others
+            choices += [0] * len(others)
+
+            num_samples = num_examples - len(indices)
+            if num_samples > 0:
+                others =random.sample([idx for idx in range(len(self.records)) if idx not in indices], num_samples)
+                indices += others
+                choices += [0] * len(others)
+            return indices, choices
+        elif 'inference' in mode:
+            others = [idx for idx in self.event_index[self.index_event[index]] if idx not in indices]
+            indices += others
+            choices += [0] * len(others)
+
+            return indices, choices
+        else:
+            raise ValueError
+
     def __getitem__(self, index):
-        event_inference_example = torch.tensor(self.examples[index])
-        labels = torch.tensor(self.labels[index])
-        record = self.records[index]
-        if not self.include_image:
-            return event_inference_example, labels
+        # get negative inference sentences
+        mode, num_examples = self.rank_mode.split('_')
+        num_examples = int(num_examples)
+        indices, choices = self.add_negative_examples(index, mode, num_examples)
+
+        # replace only the inferences
+        cur_example = np.array(self.examples[index])
+        event_inference_example = np.array([self.examples[idx] for idx in indices])
+        event_inference_example[:, self.event_pos:self.inference_pos] = cur_example[self.event_pos:self.inference_pos]
+        event_inference_example = torch.tensor(event_inference_example)
+        cur_label = np.array(self.labels[index])
+        labels = np.array([self.labels[idx] for idx in indices])
+        labels[:, self.event_pos:self.inference_pos] = cur_label[self.event_pos:self.inference_pos]
+        labels = torch.tensor(labels)
+
 
         #######
         # Compute Image Features. Adapted from https://github.com/rowanz/r2c/blob/master/dataloaders/vcg.py
         #######
+        if not self.include_image:
+            return event_inference_example, labels, choices
 
         ###################################################################
+        record = self.records[index]
+        record['inference_candidate_indices'] = indices
         # Load boxes and their features.
         with open(os.path.join(VCR_IMAGES_DIR, record['metadata_fn']), 'r') as f:
             metadata = json.load(f)
@@ -478,5 +492,5 @@ class VCGLoader:
         person_ids = torch.LongTensor(person_ids)
         subject_ids = torch.LongTensor(subject_ids)
 
-        return event_inference_example, labels, features, boxes, boxes_mask, objects, segments, person_ids, subject_ids
+        return event_inference_example, labels, features, boxes, boxes_mask, objects, segments, person_ids, subject_ids, choices
 
