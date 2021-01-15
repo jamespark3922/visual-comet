@@ -11,8 +11,8 @@
  fi
 
  ########## download videos #
- wget -c https://storage.googleapis.com/jamesp/lsmdc/video_list.txt
+ wget -c https://storage.googleapis.com/ai2-mosaic/public/visualcomet/video_list.txt
  filesToDownloadMD="video_list.txt"
 
- echo "Downloading videos..."
+ echo "Downloading 105805 videos to '$outputDir'..."
  cat $filesToDownloadMD | xargs -n 1 -P $parallelDownloads wget -crnH --cut-dirs=3 -q -P $outputDir
