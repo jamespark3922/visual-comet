@@ -135,7 +135,7 @@ We also included the generations results in `val_sample_1_num_5_top_k_0_top_p_0.
 ## Retrieval Results
 Run retrieval evaluation to get Acc@50 in paper with the command:
 ```
-python scripts/evaluate_rank.py --data_dir /path/to/visualcomet_annotations/ --model_name_or_path experiments/image_inference/ --split val
+python scripts/run_rank.py --data_dir /path/to/visualcomet_annotations/ --model_name_or_path experiments/image_inference/ --split val
 ```
 
 
