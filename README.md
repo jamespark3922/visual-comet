@@ -137,6 +137,10 @@ Run retrieval evaluation to get Acc@50 in paper with the command:
 ```
 python scripts/run_rank.py --data_dir /path/to/visualcomet_annotations/ --model_name_or_path experiments/image_inference/ --split val
 ```
+You can download the retrieval results, including the 50 random candidates. The released checkpoint gets **Acc@50: 38.5%**.
+```
+wget https://storage.googleapis.com/ai2-mosaic/public/visualcomet/val_rank_random_50.json
+```
 
 ## Downloading Before-After Videos
 You can also download videos (~300GB) that happened before and after the image:
