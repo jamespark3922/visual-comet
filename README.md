@@ -4,7 +4,7 @@ PyTorch Code and Dataset Release for [VisualCOMET: Reasoning about the Dynamic C
 For more info, you can visit our project page [https://visualcomet.xyz](https://visualcomet.xyz/).
 
 ## Update:
-**We have released the inference sentences for test set!!** Use the same download link (perhaps incognito) to get the one with test annotations.
+**We have released the inference sentences for test set!!** Use the same download link to get the one with test annotations.
 
 ## Visual Commonsense Reasoning in Time (VisualCOMET)
 Even from a single frame of a still image, people can reason about the dynamic story of the image **before, after**, and **beyond** the frame.
