@@ -3,9 +3,6 @@
 PyTorch Code and Dataset Release for [VisualCOMET: Reasoning about the Dynamic Context of a Still Image](https://arxiv.org/abs/2004.10796).
 For more info, you can visit our project page [https://visualcomet.xyz](https://visualcomet.xyz/).
 
-## Update:
-**We have released the inference sentences for test set!!** Use the same download link to get the one with test annotations.
-
 ## Visual Commonsense Reasoning in Time (VisualCOMET)
 Even from a single frame of a still image, people can reason about the dynamic story of the image **before, after**, and **beyond** the frame.
 In the following image, we can reason that the man fell into the water sometime in the past, the intent of that man at the moment is to stay alive, and he will need help in the near future or else he will get washed away.  This type of visual understanding requires a major leap from recognition-level to **cognitive-level understanding**, going far beyond identifying immediately visible content of the image.
