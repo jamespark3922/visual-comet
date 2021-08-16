@@ -150,10 +150,8 @@ bash scripts/download_videos.sh
 Note that some image may not have either one of before and after videos, if the image appeared in the beginning or end of the clip.
 
 ## Test Set Evaluation
-We will add the evaluation server soon. 
-Meanwhile, please email jspark96@cs.washington.edu for language metric scores on test set.
-
-
+You can evaluate your caption on test split via our [leaderboard](https://leaderboard.allenai.org/visualcomet/submissions/public). 
+Please follow the link for more instructions on how to make a submission.
 
 
 #### Bibtex
