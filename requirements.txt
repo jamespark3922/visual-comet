@@ -10,4 +10,4 @@ ipython
 # pytorch libraries
 torch==1.5.0
 torchvision
-transformers==2.4.1
+transformers==4.30.0
